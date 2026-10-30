@@ -1,0 +1,31 @@
+﻿{% extends "base.html" %}
+{% block title %}Datasets · KRRH{% endblock %}
+{% block content %}
+<h1>Datasets</h1>
+{% if datasets %}
+<table class="table table-hover">
+  <thead><tr>
+    <th>File</th><th>Rows</th><th>Columns</th><th>Context</th>
+    <th>Exact Dup</th><th>Event Dup</th><th>Quality</th><th>Uploaded</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for d in datasets %}
+    <tr>
+      <td>{{ d.filename }}</td>
+      <td>{{ "{:,}".format(d.rows) }}</td>
+      <td>{{ d.columns }}</td>
+      <td><span class="badge bg-secondary">{{ d.detected_context }} ({{ d.context_confidence }})</span></td>
+      <td>{{ d.exact_duplicates }}</td>
+      <td>{{ d.event_duplicates }}</td>
+      <td>{{ d.quality_score }}%</td>
+      <td>{{ d.uploaded_at.strftime("%Y-%m-%d %H:%M") }}</td>
+      <td><a class="btn btn-sm btn-outline-primary"
+             href="{{ url_for('datasets.detail', dataset_id=d.id) }}">View</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="text-muted">No datasets yet.</p>
+{% endif %}
+{% endblock %}

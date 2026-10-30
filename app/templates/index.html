@@ -1,0 +1,49 @@
+﻿{% extends "base.html" %}
+{% block title %}Dashboard · KRRH{% endblock %}
+{% block content %}
+<h1 class="mb-4">Dashboard</h1>
+<div class="row g-3 mb-4">
+  <div class="col-md-4"><div class="card bg-light"><div class="card-body">
+    <h6 class="text-muted">Datasets uploaded</h6>
+    <h2>{{ totals.datasets }}</h2>
+  </div></div></div>
+  <div class="col-md-4"><div class="card bg-light"><div class="card-body">
+    <h6 class="text-muted">Total records processed</h6>
+    <h2>{{ "{:,}".format(totals.rows) }}</h2>
+  </div></div></div>
+  <div class="col-md-4"><div class="card bg-light"><div class="card-body">
+    <h6 class="text-muted">Exact duplicates found</h6>
+    <h2>{{ totals.duplicates }}</h2>
+  </div></div></div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h4>Recent uploads</h4>
+  <a href="{{ url_for('datasets.upload') }}" class="btn btn-primary">Upload new dataset</a>
+</div>
+
+{% if recent %}
+<table class="table table-hover">
+  <thead><tr>
+    <th>File</th><th>Rows</th><th>Columns</th><th>Context</th>
+    <th>Quality</th><th>Uploaded</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for d in recent %}
+    <tr>
+      <td>{{ d.filename }}</td>
+      <td>{{ "{:,}".format(d.rows) }}</td>
+      <td>{{ d.columns }}</td>
+      <td><span class="badge bg-secondary">{{ d.detected_context }}</span></td>
+      <td>{{ d.quality_score }}%</td>
+      <td>{{ d.uploaded_at.strftime("%Y-%m-%d %H:%M") }}</td>
+      <td><a class="btn btn-sm btn-outline-primary"
+             href="{{ url_for('datasets.detail', dataset_id=d.id) }}">View</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="text-muted">No datasets uploaded yet.</p>
+{% endif %}
+{% endblock %}

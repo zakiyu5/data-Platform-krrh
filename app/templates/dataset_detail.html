@@ -1,0 +1,125 @@
+﻿{% extends "base.html" %}
+{% block title %}{{ dataset.filename }} · KRRH{% endblock %}
+{% block content %}
+<a href="{{ url_for('datasets.list_datasets') }}" class="btn btn-sm btn-outline-secondary mb-3">&larr; Back to Datasets</a>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1>{{ dataset.filename }}</h1>
+  <div>
+    {% if not dataset.is_cleaned and dataset.exact_duplicates > 0 %}
+      <a href="{{ url_for('datasets.clean', dataset_id=dataset.id) }}" class="btn btn-warning">Approve & Clean Data</a>
+    {% endif %}
+    <a href="{{ url_for('datasets.export_clean', dataset_id=dataset.id) }}" class="btn btn-success">Download Clean CSV</a>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-2"><div class="card"><div class="card-body p-3">
+    <small class="text-muted">Total Rows</small><h4>{{ "{:,}".format(dataset.rows) }}</h4>
+  </div></div></div>
+  <div class="col-md-2"><div class="card"><div class="card-body p-3">
+    <small class="text-muted">Columns</small><h4>{{ dataset.columns }}</h4>
+  </div></div></div>
+  <div class="col-md-2"><div class="card"><div class="card-body p-3">
+    <small class="text-muted">Exact Dupes</small><h4 class="text-danger">{{ dataset.exact_duplicates }}</h4>
+  </div></div></div>
+  <div class="col-md-2"><div class="card"><div class="card-body p-3">
+    <small class="text-muted">Event Dupes</small><h4>{{ dataset.event_duplicates }}</h4>
+  </div></div></div>
+  <div class="col-md-2"><div class="card"><div class="card-body p-3">
+    <small class="text-muted">Quality Score</small><h4>{{ dataset.quality_score }}%</h4>
+  </div></div></div>
+  <div class="col-md-2"><div class="card"><div class="card-body p-3">
+    <small class="text-muted">Status</small><h4>{% if dataset.is_cleaned %}<span class="text-success">Cleaned</span>{% else %}<span class="text-warning">Raw</span>{% endif %}</h4>
+  </div></div></div>
+</div>
+
+<h3 class="mb-3">Dynamic Analytics (Based on actual data)</h3>
+{% if charts %}
+<div class="row mb-4">
+  {% for chart in charts %}
+  <div class="col-md-6 mb-4">
+    <div class="card p-3 h-100">
+      <h5>{{ chart.title }}</h5>
+      <canvas id="chart_{{ loop.index }}"></canvas>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="alert alert-info">Not enough suitable columns found to generate automatic charts (e.g., no dates or distinct categories).</div>
+{% endif %}
+
+<!-- ISSUES & DUPES & COLUMNS -->
+<div class="row mb-4">
+  <div class="col-md-6">
+    <h4>Data Quality Issues</h4>
+    {% if issues %}
+    <table class="table table-sm">
+      <thead><tr><th>Severity</th><th>Type</th><th>Description</th></tr></thead>
+      <tbody>
+        {% for i in issues %}
+        <tr>
+          <td>
+            {% if i.severity == 'critical' %}<span class="badge bg-danger">Critical</span>
+            {% elif i.severity == 'warning' %}<span class="badge bg-warning text-dark">Warning</span>
+            {% else %}<span class="badge bg-info text-dark">Info</span>{% endif %}
+          </td>
+          <td>{{ i.issue_type }}</td>
+          <td class="small">{{ i.description }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="text-muted">No issues found.</p>{% endif %}
+  </div>
+  <div class="col-md-6">
+    <h4>Semantic Column Mapping</h4>
+    <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+      <table class="table table-sm table-striped mb-0">
+        <thead><tr><th>Column</th><th>Concept</th><th>Confidence</th></tr></thead>
+        <tbody>
+        {% for c in columns %}
+          <tr>
+            <td>{{ c.name }}</td>
+            <td>
+              {% if c.confidence >= 0.9 %}<span class="badge bg-success">{{ c.suggested_concept }}</span>
+              {% elif c.confidence >= 0.7 %}<span class="badge bg-warning text-dark">{{ c.suggested_concept }}</span>
+              {% else %}<span class="badge bg-secondary">{{ c.suggested_concept }}</span>{% endif %}
+            </td>
+            <td>{{ c.confidence }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  const chartsData = {{ charts | tojson | safe }};
+  
+  document.addEventListener("DOMContentLoaded", function() {
+    chartsData.forEach((chart, index) => {
+      const canvasId = 'chart_' + (index + 1);
+      new Chart(document.getElementById(canvasId), {
+        type: chart.type,
+        data: {
+          labels: chart.labels,
+          datasets: [{
+            label: 'Records',
+            data: chart.data,
+            backgroundColor: chart.color,
+            borderColor: chart.color,
+            tension: 0.1,
+            fill: false
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    });
+  });
+</script>
+<style>
+  canvas { max-height: 250px; }
+</style>
+{% endblock %}
