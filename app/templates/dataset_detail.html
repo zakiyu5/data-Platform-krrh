@@ -1,10 +1,21 @@
 ﻿{% extends "base.html" %}
 {% block title %}{{ dataset.filename }} · KRRH{% endblock %}
 {% block content %}
-<a href="{{ url_for('datasets.list_datasets') }}" class="btn btn-sm btn-outline-secondary mb-3">&larr; Back to Datasets</a>
+<style>
+  @media print {
+    .navbar, .btn, .nav-link { display: none !important; }
+    .card { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; }
+    body { background: white; }
+  }
+</style>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h1>{{ dataset.filename }}</h1>
   <div>
+    <a href="{{ url_for('datasets.list_datasets') }}" class="btn btn-sm btn-outline-secondary mb-2 d-print-none">&larr; Back</a>
+    <h1>{{ dataset.filename }}</h1>
+  </div>
+  <div class="d-print-none">
+    <button onclick="window.print()" class="btn btn-primary">🖨️ Print / Save as PDF</button>
     {% if not dataset.is_cleaned and dataset.exact_duplicates > 0 %}
       <a href="{{ url_for('datasets.clean', dataset_id=dataset.id) }}" class="btn btn-warning">Approve & Clean Data</a>
     {% endif %}
@@ -33,7 +44,18 @@
   </div></div></div>
 </div>
 
-<h3 class="mb-3">Dynamic Analytics (Based on actual data)</h3>
+{% if insights %}
+<div class="alert alert-primary shadow-sm">
+  <h5 class="alert-heading">💡 Automated Insights</h5>
+  <ul class="mb-0">
+    {% for insight in insights %}
+      <li>{{ insight | safe }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<h3 class="mb-3">Dynamic Analytics</h3>
 {% if charts %}
 <div class="row mb-4">
   {% for chart in charts %}
@@ -46,10 +68,9 @@
   {% endfor %}
 </div>
 {% else %}
-<div class="alert alert-info">Not enough suitable columns found to generate automatic charts (e.g., no dates or distinct categories).</div>
+<div class="alert alert-info">Not enough suitable columns found to generate automatic charts.</div>
 {% endif %}
 
-<!-- ISSUES & DUPES & COLUMNS -->
 <div class="row mb-4">
   <div class="col-md-6">
     <h4>Data Quality Issues</h4>
@@ -74,7 +95,7 @@
   </div>
   <div class="col-md-6">
     <h4>Semantic Column Mapping</h4>
-    <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
       <table class="table table-sm table-striped mb-0">
         <thead><tr><th>Column</th><th>Concept</th><th>Confidence</th></tr></thead>
         <tbody>
@@ -114,7 +135,13 @@
             fill: false
           }]
         },
-        options: { responsive: true, maintainAspectRatio: false }
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: chart.type === 'pie' } // Hide legend for bar charts to save space
+            }
+        }
       });
     });
   });

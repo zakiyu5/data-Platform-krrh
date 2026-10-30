@@ -9,7 +9,6 @@ from app.services.quality_engine import scan_quality
 import pandas as pd
 import os
 import io
-import json
 
 datasets_bp = Blueprint("datasets", __name__)
 
@@ -95,21 +94,18 @@ def list_datasets():
     datasets = Dataset.query.order_by(Dataset.uploaded_at.desc()).all()
     return render_template("datasets.html", datasets=datasets)
 
-def generate_dynamic_charts(df_clean, profiles):
-    """Looks at the actual data and generates charts based on what is there."""
+def generate_dynamic_charts_and_insights(df_clean, profiles):
     charts = []
+    insights = []
     
-    # Sort profiles to prioritize categorical and date types
-    # We ignore IDs, completely empty columns, and pure free-text (too messy for a chart)
     good_cols = [p for p in profiles if p['inferred_type'] in ['categorical', 'date', 'numeric'] and p['unique_count'] > 1]
     
     for col in good_cols:
-        if len(charts) >= 4: # Max 4 charts so dashboard doesn't get too crowded
-            break
+        if len(charts) >= 4: break
             
         col_name = col['name']
         
-        # 1. Date Columns -> Line Chart (Trends)
+        # Date Charts
         if col['inferred_type'] == 'date':
             try:
                 df_clean['parsed_date'] = pd.to_datetime(df_clean[col_name], errors='coerce')
@@ -117,39 +113,49 @@ def generate_dynamic_charts(df_clean, profiles):
                 trend = trend.sort_values('parsed_date').tail(30)
                 if len(trend) > 1:
                     charts.append({
-                        'type': 'line',
-                        'title': f'Trend by {col_name}',
+                        'type': 'line', 'title': f'Trend by {col_name}',
                         'labels': trend['parsed_date'].astype(str).tolist(),
-                        'data': trend['count'].tolist(),
-                        'color': '#0d6efd'
+                        'data': trend['count'].tolist(), 'color': '#0d6efd'
                     })
             except Exception: pass
             
-        # 2. Categorical/Text -> Bar Chart (Top 10)
+        # Categorical Charts & Insights
         elif col['inferred_type'] in ['categorical', 'text']:
-            if 2 <= col['unique_count'] <= 50: # Good for a bar chart
+            if 2 <= col['unique_count'] <= 50:
                 counts = df_clean[col_name].value_counts().head(10)
+                total = len(df_clean)
+                top_val = counts.index[0]
+                top_count = counts.iloc[0]
+                pct = round((top_count / total) * 100, 1)
+                
+                insights.append(f"🏆 The most common **{col_name}** is **{top_val}** ({top_count} records, {pct}% of total).")
+                
+                chart_type = 'pie' if col['unique_count'] <= 5 else 'bar'
                 charts.append({
-                    'type': 'bar',
-                    'title': f'Top 10 {col_name}',
+                    'type': chart_type, 'title': f'Distribution of {col_name}',
                     'labels': counts.index.astype(str).tolist(),
-                    'data': counts.values.tolist(),
-                    'color': '#198754'
+                    'data': counts.values.tolist(), 
+                    'color': '#198754' if chart_type == 'bar' else ['#0d6efd', '#dc3545', '#ffc107', '#198754', '#6c757d']
                 })
                 
-        # 3. Numeric -> Bar/Distribution Chart
+        # Numeric Charts & Insights
         elif col['inferred_type'] == 'numeric':
-            if 2 <= col['unique_count'] <= 20:
-                counts = df_clean[col_name].value_counts().sort_index().head(10)
-                charts.append({
-                    'type': 'bar',
-                    'title': f'Distribution of {col_name}',
-                    'labels': counts.index.astype(str).tolist(),
-                    'data': counts.values.tolist(),
-                    'color': '#dc3545'
-                })
+            try:
+                numeric_data = pd.to_numeric(df_clean[col_name], errors='coerce').dropna()
+                if len(numeric_data) > 0:
+                    avg_val = round(numeric_data.mean(), 2)
+                    insights.append(f"📊 The average **{col_name}** is **{avg_val}**.")
+                    
+                    if 2 <= col['unique_count'] <= 20:
+                        counts = numeric_data.value_counts().sort_index().head(10)
+                        charts.append({
+                            'type': 'bar', 'title': f'Distribution of {col_name}',
+                            'labels': counts.index.astype(str).tolist(),
+                            'data': counts.values.tolist(), 'color': '#dc3545'
+                        })
+            except Exception: pass
                 
-    return charts
+    return charts, insights[:4] # Return max 4 insights to keep it clean
 
 @datasets_bp.route("/<int:dataset_id>")
 def detail(dataset_id):
@@ -158,19 +164,18 @@ def detail(dataset_id):
     issues = QualityIssue.query.filter_by(dataset_id=dataset.id).all()
     dupes = DuplicateCandidate.query.filter_by(dataset_id=dataset.id).all()
     
-    charts_data = []
+    charts_data, insights_data = [], []
     try:
         df = read_dataset(dataset.stored_path)
         if not df.empty:
-            df_clean = df.drop_duplicates() # Use clean data for charts
-            # Convert profiles back to dicts for the chart generator
+            df_clean = df.drop_duplicates()
             profiles_dict = [{'name': c.name, 'inferred_type': c.inferred_type, 'unique_count': c.unique_count} for c in columns]
-            charts_data = generate_dynamic_charts(df_clean, profiles_dict)
+            charts_data, insights_data = generate_dynamic_charts_and_insights(df_clean, profiles_dict)
     except Exception as e:
         print(f"Analytics error: {e}")
 
     return render_template("dataset_detail.html", dataset=dataset, columns=columns, 
-                           issues=issues, dupes=dupes, charts=charts_data)
+                           issues=issues, dupes=dupes, charts=charts_data, insights=insights_data)
 
 @datasets_bp.route("/<int:dataset_id>/clean")
 def clean(dataset_id):
